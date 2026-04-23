@@ -20,7 +20,7 @@ with st.sidebar:
     st.header("Feedback Loop")
     st.info("Found a bug or have a request?")
     # Replacement for "Report a Bug" link
-    st.link_button("Report a Bug", "https://forms.gle/your_google_form_link") 
+    st.link_button("Report a Bug", "https://forms.gle/ohLGcn4jUv9B4ppH8") 
     
     st.divider()
     st.write("Built for the r/excel community.")
