@@ -24,14 +24,21 @@ if uploaded_files:
             df = pd.read_csv(file)
         elif file.name.endswith('.pdf'):
             # Specific PDF extraction logic for the "Main" dataframe preview
-            with pdfplumber.open(file) as pdf:
+           with pdfplumber.open(file) as pdf:
                 all_rows = []
                 for page in pdf.pages:
                     table = page.extract_table()
                     if table:
+                        # Clean out empty rows
+                        table = [row for row in table if any(cell is not None and cell != "" for cell in row)]
                         all_rows.extend(table)
+                
                 if all_rows:
-                    df = pd.DataFrame(all_rows[1:], columns=all_rows[0])
+                    # Create DataFrame without forcing columns first
+                    df = pd.DataFrame(all_rows)
+                    # Use the first row as headers and reset
+                    df.columns = df.iloc[0]
+                    df = df[1:].reset_index(drop=True)
         else:
             df = pd.read_excel(file)
     else:
