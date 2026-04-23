@@ -22,8 +22,43 @@ if uploaded_files:
         file = uploaded_files[0]
         if file.name.endswith('.csv'):
             df = pd.read_csv(file)
-        elif file.name.endswith('.pdf'):
-      elif file.name.endswith('.pdf'):
+     elif file.name.endswith('.pdf'):
+            try:
+                with pdfplumber.open(file) as pdf:
+                    all_rows = []
+                    for page in pdf.pages:
+                        table = page.extract_table()
+                        if table:
+                            # Clean out rows that are entirely empty
+                            table = [row for row in table if any(cell is not None and str(cell).strip() != "" for cell in row)]
+                            all_rows.extend(table)
+                    
+                    if all_rows:
+                        # 1. Padding: ensures all rows have the same number of columns
+                        max_cols = max(len(r) for r in all_rows)
+                        padded_rows = [r + [None] * (max_cols - len(r)) for r in all_rows]
+                        
+                        df = pd.DataFrame(padded_rows)
+                        
+                        # 2. Safety Header Logic: makes column names unique
+                        raw_headers = df.iloc[0]
+                        clean_headers = []
+                        for i, val in enumerate(raw_headers):
+                            header_name = str(val).strip() if val else f"Column_{i}"
+                            if header_name in clean_headers:
+                                header_name = f"{header_name}_{i}"
+                            clean_headers.append(header_name)
+                            
+                        df.columns = clean_headers
+                        df = df[1:].reset_index(drop=True)
+                    else:
+                        st.warning("No tables found in this PDF.")
+                        df = pd.DataFrame()
+            except Exception as e:
+                st.error(f"PDF Error: {e}")
+                df = pd.DataFrame()
+        else:
+            df = pd.read_excel(file)
             try:
                 with pdfplumber.open(file) as pdf:
                     all_rows = []
