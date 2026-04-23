@@ -82,6 +82,15 @@ if uploaded_files:
             "⏰ Time Calculator", 
             "📊 Data Merger"
         ])
+        with st.sidebar:
+            st.header("How to use:")
+            st.numbered_list([
+                "Upload your messy file.",
+                "Choose a tab (e.g., Logic Mapper).",
+                "Configure your rules.",
+                "Hit 'Apply' and Download!"
+            ])
+            st.info("Built for the r/excel community.")
 
         # TAB 1: LOGIC MAPPER (Dependent Cells)
         with tab1:
