@@ -122,12 +122,14 @@ if check_password():
             st.write("### Data Preview", df.head(5))
             st.divider()
 
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+           # UPDATE THIS LINE to include the 6th tab
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
                 "🎯 Logic Mapper", 
                 "📄 PDF Extractor",
                 "🧹 Text Cleaner", 
                 "⏰ Time Calculator", 
-                "📊 Data Merger"
+                "📊 Data Merger",
+                "🕵️ Duplicate Detective"
             ])
 
             # TAB 1: LOGIC MAPPER
