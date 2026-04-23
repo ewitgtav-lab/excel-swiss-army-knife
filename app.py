@@ -181,27 +181,36 @@ if check_password():
                 st.write(f"Total Rows: {len(df)}")
                 st.write(f"Total Columns: {len(df.columns)}")
 
-            # Add this to your Tabbed Interface
+           # TAB 6: DUPLICATE DETECTIVE (Updated for Visual Impact)
             with tab6:
                 st.header("🕵️ Duplicate Detective")
-                st.write("Find rows where multiple columns match exactly (perfect for finding system errors).")
+                st.write("Find rows where multiple columns match exactly. Perfect for finding system errors or duplicate insurance claims.")
     
-    # User selects which columns must all match
-                match_cols = st.multiselect("Select columns to check for matching values:", df.columns)
+                # User selects which columns must all match (e.g., Claim ID, Amount, and Date)
+                match_cols = st.multiselect("Select columns that should be unique (e.g., Claim ID, Date):", df.columns)
     
                 if match_cols:
-        # Logic to find duplicates based on selected columns
-                    is_duplicate = df.duplicated(subset=match_cols, keep=False)
-        
-                    if st.button("Identify Duplicates"):
-                        df['Is_Duplicate'] = is_duplicate
-            # Filter to show only the problem rows
+                    if st.button("Run Duplicate Scan"):
+                        # Logic to find duplicates based on selected columns
+                        # keep=False marks ALL copies as duplicates so we can see them side-by-side
+                        df['Is_Duplicate'] = df.duplicated(subset=match_cols, keep=False)
+            
+                        # Filter to show only the problem rows for the preview
                         dupes_only = df[df['Is_Duplicate'] == True].sort_values(by=match_cols)
             
-                        st.warning(f"Found {len(dupes_only)} rows with matching values in {match_cols}!")
-                        st.dataframe(dupes_only)
-            
-                        st.info("The downloaded file will now include an 'Is_Duplicate' column for easy filtering.")
+                        if not dupes_only.empty:
+                            st.warning(f"🚨 Found {len(dupes_only)} potential duplicate rows based on {match_cols}!")
+                            
+                            # Visual Highlight: Color-code the rows so they are easy to see
+                            def highlight_dupes(x):
+                                return ['background-color: #4b2525' if x.Is_Duplicate else '' for _ in x]
+
+                            st.dataframe(dupes_only.style.apply(highlight_dupes, axis=1))
+                            st.info("The rows above show the exact matches found in your system. This preview is sorted so you can compare them easily.")
+                        else:
+                            st.success("✅ No duplicates found! Your data is clean based on these columns.")
+                        
+                        st.info("Note: The final 'Is_Duplicate' column is added to your download for easy filtering in Excel.")
 
             # --- DOWNLOAD ---
             st.divider()
