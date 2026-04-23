@@ -181,6 +181,28 @@ if check_password():
                 st.write(f"Total Rows: {len(df)}")
                 st.write(f"Total Columns: {len(df.columns)}")
 
+            # Add this to your Tabbed Interface
+            with tab6:
+                st.header("🕵️ Duplicate Detective")
+                st.write("Find rows where multiple columns match exactly (perfect for finding system errors).")
+    
+    # User selects which columns must all match
+                match_cols = st.multiselect("Select columns to check for matching values:", df.columns)
+    
+                if match_cols:
+        # Logic to find duplicates based on selected columns
+                    is_duplicate = df.duplicated(subset=match_cols, keep=False)
+        
+                    if st.button("Identify Duplicates"):
+                        df['Is_Duplicate'] = is_duplicate
+            # Filter to show only the problem rows
+                        dupes_only = df[df['Is_Duplicate'] == True].sort_values(by=match_cols)
+            
+                        st.warning(f"Found {len(dupes_only)} rows with matching values in {match_cols}!")
+                        st.dataframe(dupes_only)
+            
+                        st.info("The downloaded file will now include an 'Is_Duplicate' column for easy filtering.")
+
             # --- DOWNLOAD ---
             st.divider()
             output = BytesIO()
