@@ -37,7 +37,7 @@ if check_password():
         """)
         st.divider()
         st.header("Feedback Loop")
-        st.link_button("Report a Bug", "https://forms.gle/your_google_form_link") 
+        st.link_button("Report a Bug", "https://forms.gle/meJoDXeu57BaP38n6") 
         st.divider()
         st.write("Built for the r/excel community.")
 
