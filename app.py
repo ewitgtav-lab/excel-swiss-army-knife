@@ -13,39 +13,6 @@ st.set_page_config(page_title="Ultimate Excel Automator", layout="wide")
 
 
 # ---------------------------
-# Security / Access
-# ---------------------------
-
-
-def _get_password_secret() -> str | None:
-    try:
-        return st.secrets.get("password")
-    except Exception:
-        return None
-
-
-def _check_password() -> bool:
-    secret = _get_password_secret()
-    if not secret:
-        return True
-
-    if st.session_state.get("password_correct"):
-        return True
-
-    def password_entered():
-        st.session_state["password_correct"] = st.session_state.get("password") == secret
-        st.session_state.pop("password", None)
-
-    st.text_input(
-        "Enter Beta Access Password",
-        type="password",
-        on_change=password_entered,
-        key="password",
-    )
-    return False
-
-
-# ---------------------------
 # Caching + File Readers
 # ---------------------------
 
@@ -343,9 +310,6 @@ def _set_df(df: pd.DataFrame):
 # App
 # ---------------------------
 
-
-if not _check_password():
-    st.stop()
 
 _ensure_state()
 
