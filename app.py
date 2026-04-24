@@ -87,10 +87,11 @@ if check_password():
             st.write("### Data Preview", df.head(5).astype(str))
             st.divider()
 
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-                "🎯 Logic Mapper", "📄 PDF Extractor", "🧹 Text Cleaner", 
-                "⏰ Time Calculator", "📊 Data Merger", "🕵️ Duplicate Detective"
-            ])
+           # 1. Update your tab list at the top of the app
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "🎯 Logic Mapper", "📄 PDF Extractor", "🧹 Text Cleaner", 
+    "⏰ Time Calculator", "📊 Data Merger", "🕵️ Duplicate Detective", "🔄 Format Shifter"
+])
 
             with tab1:
                 st.header("Conditional Data Population")
@@ -151,7 +152,43 @@ if check_password():
                                 return ['background-color: #4b2525' if x.Is_Duplicate else '' for _ in x]
                             st.dataframe(dupes_only.astype(str).style.apply(highlight_dupes, axis=1))
                         else:
-                            st.success("✅ No duplicates found in your selected columns!")
+                            st.success("✅ No duplicates found in your selected columns!")  
+
+               # 2. Add this block for the new tab
+with tab7:
+    st.header("🔄 The Format Shifter")
+    st.write("Convert your data into report-ready formats.")
+    
+    convert_option = st.selectbox("What do you want to do?", [
+        "Export Current Data to PDF (Report Mode)",
+        "Export Current Data to Word (Table Mode)",
+        "Export Current Data to JSON (Developer Mode)"
+    ])
+
+    if st.button("Generate Conversion"):
+        try:
+            buffer = BytesIO()
+            
+            if "PDF" in convert_option:
+                # Simple PDF export using a dataframe-to-html approach
+                # (Requires no extra heavy libraries for basic reports)
+                html = df.to_html()
+                st.download_button("📥 Download PDF Report", data=html, file_name="report.html")
+                st.info("Note: Downloads as HTML for best formatting; 'Save as PDF' in your browser!")
+
+            elif "Word" in convert_option:
+                # This prepares a clean CSV that Word can import as a perfect table
+                df.to_csv(buffer, index=False)
+                st.download_button("📥 Download Word-Ready CSV", data=buffer.getvalue(), file_name="word_table.csv")
+                st.info("Tip: In Word, go to Insert > Table > Convert Text to Table.")
+
+            elif "JSON" in convert_option:
+                json_data = df.to_json(orient="records", indent=4)
+                st.download_button("📥 Download JSON File", data=json_data, file_name="data_export.json")
+                
+            st.success(f"Successfully prepared {convert_option}!")
+        except Exception as e:
+            st.error(f"Conversion failed: {e}")
 
             st.divider()
             output = BytesIO()
