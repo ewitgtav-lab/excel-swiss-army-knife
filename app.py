@@ -37,7 +37,7 @@ if check_password():
         """)
         st.divider()
         st.header("Feedback Loop")
-        st.link_button("Report a Bug", "https://forms.gle/meJoDXeu57BaP38n6") 
+        st.link_button("Report a Bug", "https://forms.gle/your_google_form_link") 
         st.divider()
         st.write("Built for the r/excel community.")
 
@@ -83,7 +83,7 @@ if check_password():
             df = pd.concat(df_list, ignore_index=True)
 
         if not df.empty:
-            # FIX 1: Convert preview to string to prevent Arrow Serialization errors
+            # FIX: Convert preview to string to prevent Arrow Serialization errors
             st.write("### Data Preview", df.head(5).astype(str))
             st.divider()
 
@@ -118,12 +118,20 @@ if check_password():
                 t_col1 = st.selectbox("Start Time", df.columns, key="time_src1")
                 t_col2 = st.selectbox("End Time", df.columns, key="time_src2")
                 if st.button("Calculate Minutes"):
-                    df['Duration_Mins'] = (pd.to_datetime(df[t_col2]) - pd.to_datetime(df[t_col1])).dt.total_seconds() / 60
-                    st.success("Calculated durations!")
+                    # FIX: Added errors='coerce' to prevent DateParseError crashing the app
+                    # This turns unparseable strings like 'SHP-101' into NaT (Not a Time) instead of crashing
+                    start = pd.to_datetime(df[t_col1], errors='coerce')
+                    end = pd.to_datetime(df[t_col2], errors='coerce')
+                    df['Duration_Mins'] = (end - start).dt.total_seconds() / 60
+                    st.success("Calculated durations! (Rows with invalid dates will be blank)")
 
             with tab5:
+                # UPDATED: Added Column Labels as requested
                 st.header("Multi-File Summary")
-                st.write(f"Total Rows: {len(df)}")
+                st.write(f"**Total Rows:** {len(df)}")
+                st.write(f"**Total Columns:** {len(df.columns)}")
+                st.write("**Column Labels Found:**")
+                st.write(", ".join(df.columns))
 
             with tab6:
                 st.header("🕵️ Duplicate Detective")
@@ -131,7 +139,6 @@ if check_password():
                 match_cols = st.multiselect("Select columns that should be unique:", df.columns)
                 if match_cols:
                     if st.button("Run Duplicate Scan"):
-                        # FIX 2: Ensure comparison columns are strings for Arrow compatibility
                         temp_df = df.copy()
                         for col in match_cols:
                             temp_df[col] = temp_df[col].astype(str)
@@ -143,7 +150,6 @@ if check_password():
                             st.warning(f"🚨 Found {len(dupes_only)} duplicate rows!")
                             def highlight_dupes(x):
                                 return ['background-color: #4b2525' if x.Is_Duplicate else '' for _ in x]
-                            # Display as string to fix Arrow crash
                             st.dataframe(dupes_only.astype(str).style.apply(highlight_dupes, axis=1))
                         else:
                             st.success("✅ No duplicates found!")
