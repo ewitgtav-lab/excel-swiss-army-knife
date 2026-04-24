@@ -49,6 +49,7 @@ if check_password():
     df = pd.DataFrame()
 
     if uploaded_files:
+        # --- LOADING LOGIC ---
         if len(uploaded_files) == 1:
             file = uploaded_files[0]
             if file.name.endswith('.csv'):
@@ -83,15 +84,14 @@ if check_password():
             df = pd.concat(df_list, ignore_index=True)
 
         if not df.empty:
-            # FIX: Convert preview to string to prevent Arrow Serialization errors
             st.write("### Data Preview", df.head(5).astype(str))
             st.divider()
 
-           # 1. Update your tab list at the top of the app
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "🎯 Logic Mapper", "📄 PDF Extractor", "🧹 Text Cleaner", 
-    "⏰ Time Calculator", "📊 Data Merger", "🕵️ Duplicate Detective", "🔄 Format Shifter"
-])
+            # --- TABS (Fixed Indentation) ---
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+                "🎯 Logic Mapper", "📄 PDF Extractor", "🧹 Text Cleaner", 
+                "⏰ Time Calculator", "📊 Data Merger", "🕵️ Duplicate Detective", "🔄 Format Shifter"
+            ])
 
             with tab1:
                 st.header("Conditional Data Population")
@@ -104,6 +104,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 
             with tab2:
                 st.header("PDF to Table Extraction")
+                st.write("Data extracted from PDF is shown below. You can now use other tabs to clean it.")
                 st.dataframe(df.astype(str))
 
             with tab3:
@@ -119,79 +120,65 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
                 t_col1 = st.selectbox("Start Time", df.columns, key="time_src1")
                 t_col2 = st.selectbox("End Time", df.columns, key="time_src2")
                 if st.button("Calculate Minutes"):
-                    # errors='coerce' prevents the "SHP-101" crash
                     df['Duration_Mins'] = (pd.to_datetime(df[t_col2], errors='coerce') - 
                                            pd.to_datetime(df[t_col1], errors='coerce')).dt.total_seconds() / 60
-                    st.success("Calculated durations! Invalid dates were skipped.")
+                    st.success("Calculated durations!")
 
             with tab5:
                 st.header("📊 Multi-File Summary")
                 st.write(f"**Total Rows:** {len(df)}")
                 st.write(f"**Total Columns:** {len(df.columns)}")
-                st.write("**Column Labels:**")
                 st.info(", ".join(df.columns)) 
 
             with tab6:
                 st.header("🕵️ Duplicate Detective")
-                match_cols = st.multiselect("Select columns that should be unique:", df.columns)
-                
+                match_cols = st.multiselect("Select unique-identifying columns:", df.columns)
                 if match_cols:
                     if st.button("Run Duplicate Scan"):
                         scan_df = df.dropna(subset=match_cols).copy()
                         for col in match_cols:
                             scan_df[col] = scan_df[col].astype(str)
-                        
                         df['Is_Duplicate'] = False
                         df.loc[scan_df.index, 'Is_Duplicate'] = scan_df.duplicated(subset=match_cols, keep=False)
-                        
                         dupes_only = df[df['Is_Duplicate'] == True].sort_values(by=match_cols)
-                        
                         if not dupes_only.empty:
                             st.warning(f"🚨 Found {len(dupes_only)} duplicate rows!")
                             def highlight_dupes(x):
                                 return ['background-color: #4b2525' if x.Is_Duplicate else '' for _ in x]
                             st.dataframe(dupes_only.astype(str).style.apply(highlight_dupes, axis=1))
                         else:
-                            st.success("✅ No duplicates found in your selected columns!")  
+                            st.success("✅ No duplicates found!")
 
-               # 2. Add this block for the new tab
-with tab7:
-    st.header("🔄 The Format Shifter")
-    st.write("Convert your data into report-ready formats.")
-    
-    convert_option = st.selectbox("What do you want to do?", [
-        "Export Current Data to PDF (Report Mode)",
-        "Export Current Data to Word (Table Mode)",
-        "Export Current Data to JSON (Developer Mode)"
-    ])
+            with tab7:
+                st.header("🔄 The Format Shifter")
+                st.write("Convert your data into report-ready formats.")
+                convert_option = st.selectbox("Export format:", [
+                    "Excel to PDF (Clean Report)",
+                    "Excel to Word (Ready for Tables)",
+                    "Data to JSON (For Developers)"
+                ])
 
-    if st.button("Generate Conversion"):
-        try:
-            buffer = BytesIO()
-            
-            if "PDF" in convert_option:
-                # Simple PDF export using a dataframe-to-html approach
-                # (Requires no extra heavy libraries for basic reports)
-                html = df.to_html()
-                st.download_button("📥 Download PDF Report", data=html, file_name="report.html")
-                st.info("Note: Downloads as HTML for best formatting; 'Save as PDF' in your browser!")
+                if st.button("Process Conversion"):
+                    try:
+                        if "PDF" in convert_option:
+                            html = df.to_html()
+                            st.download_button("📥 Download HTML Report", data=html, file_name="report.html")
+                            st.info("Browser Tip: Open the HTML file and press Ctrl+P to 'Save as PDF'.")
+                        elif "Word" in convert_option:
+                            csv_buffer = BytesIO()
+                            df.to_csv(csv_buffer, index=False)
+                            st.download_button("📥 Download Word-Ready CSV", data=csv_buffer.getvalue(), file_name="word_table.csv")
+                            st.info("Word Tip: Insert > Table > Convert Text to Table in Microsoft Word.")
+                        elif "JSON" in convert_option:
+                            json_data = df.to_json(orient="records", indent=4)
+                            st.download_button("📥 Download JSON", data=json_data, file_name="export.json")
+                        st.success("Conversion Ready!")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
-            elif "Word" in convert_option:
-                # This prepares a clean CSV that Word can import as a perfect table
-                df.to_csv(buffer, index=False)
-                st.download_button("📥 Download Word-Ready CSV", data=buffer.getvalue(), file_name="word_table.csv")
-                st.info("Tip: In Word, go to Insert > Table > Convert Text to Table.")
-
-            elif "JSON" in convert_option:
-                json_data = df.to_json(orient="records", indent=4)
-                st.download_button("📥 Download JSON File", data=json_data, file_name="data_export.json")
-                
-            st.success(f"Successfully prepared {convert_option}!")
-        except Exception as e:
-            st.error(f"Conversion failed: {e}")
-
+            # --- FINAL DOWNLOAD (Must stay inside 'if not df.empty') ---
             st.divider()
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False)
-            st.download_button("📥 Download Processed File", output.getvalue(), "automated_results.xlsx")
+            st.download_button("📥 Download Main Processed Excel", output.getvalue(), "automated_results.xlsx")
