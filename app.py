@@ -3,6 +3,7 @@ import pandas as pd
 import pdfplumber
 from docx import Document
 from io import BytesIO
+import re
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Ultimate Excel Automator", layout="wide")
@@ -39,27 +40,36 @@ def load_and_clean_data(uploaded_files):
     # 1. Header Sanitization (Prevents Arrow Warnings)
     df.columns = [str(c) for c in df.columns]
     
-    # 2. Auto-fix Scientific Notation immediately on upload
+    # 2. Auto-fix Scientific Notation (Regex Protected)
     for col in df.columns:
-        if df[col].astype(str).str.contains('E', na=False).any():
-            df[col] = df[col].astype(str).apply(
-                lambda x: '{:.10f}'.format(float(x)).rstrip('0').rstrip('.') if 'E' in str(x) else x
-            )
+        # Only targets strings that look like 7.7E-05, ignores names like 'Ernesto'
+        sample = df[col].astype(str)
+        is_sci_not = sample.str.contains(r'^-?\d+\.?\d*[eE][+-]?\d+$', na=False).any()
+        
+        if is_sci_not:
+            try:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = df[col].apply(lambda x: '{:.10f}'.format(x).rstrip('0').rstrip('.') if pd.notnull(x) else x)
+            except:
+                continue
+                
     return df
 
 def check_password():
-    def password_entered():
-        if st.session_state["password"] == st.secrets["password"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
     if "password_correct" not in st.session_state:
+        def password_entered():
+            if st.session_state["password"] == st.secrets["password"]:
+                st.session_state["password_correct"] = True
+                del st.session_state["password"]
+            else:
+                st.session_state["password_correct"] = False
         st.text_input("Enter Beta Access Password", type="password", on_change=password_entered, key="password")
+        st.info("DM @Gewish on Reddit for access.")
         return False
     return st.session_state["password_correct"]
 
 if check_password():
+    # --- SIDEBAR ---
     with st.sidebar:
         st.header("🛠️ Tool Belt")
         if st.button("♻️ Reset App"):
@@ -72,10 +82,10 @@ if check_password():
         st.link_button("☕ Support my Work", "https://paypal.me/GewishCatedrilla")
         
         st.divider()
-        st.markdown("**Version 2.0 - Swiss Army Knife**")
+        st.markdown("**Version 2.5 - Swiss Army Knife**")
 
     st.title("🛠️ The Excel Swiss Army Knife")
-    st.markdown("Automating Reddit's biggest spreadsheet headaches.")
+    st.markdown("Automating the most annoying spreadsheet tasks from Reddit.")
 
     uploaded_files = st.file_uploader("Upload Excel, CSV, PDF, or Word", 
                                      type=["xlsx", "csv", "pdf", "docx"], 
@@ -92,26 +102,25 @@ if check_password():
                 "⏰ Time Math", "🔄 Shifter", "✅ Validator", "📂 Word"
             ])
 
-            # TAB 1: NEW! AGGREGATOR (The SUMIFS Problem)
+            # TAB 1: AGGREGATOR (The SUMIFS Fix)
             with tabs[0]:
-                st.header("Smart Aggregator (Auto-SUMIFS)")
-                st.write("Calculate totals based on groups (e.g., Total Cost per Item Quantity).")
-                group_col = st.selectbox("Group by (e.g., 'Item Name'):", df.columns)
-                calc_col = st.selectbox("Column to Sum (e.g., 'Cost'):", df.columns)
-                
+                st.header("Smart Aggregator")
+                group_col = st.selectbox("Group by (e.g. Item Name):", df.columns)
+                calc_col = st.selectbox("Column to Sum (e.g. Cost):", df.columns)
                 if st.button("Generate Summary"):
-                    df[calc_col] = pd.to_numeric(df[calc_col], errors='coerce')
-                    summary = df.groupby(group_col)[calc_col].sum().reset_index()
+                    temp_df = df.copy()
+                    temp_df[calc_col] = pd.to_numeric(temp_df[calc_col], errors='coerce')
+                    summary = temp_df.groupby(group_col)[calc_col].sum().reset_index()
                     st.dataframe(summary)
                     st.download_button("📥 Download Summary", summary.to_csv(index=False), "summary.csv")
 
             # TAB 2: LOGIC MAPPER
             with tabs[1]:
                 st.header("Categorization Logic")
-                col_to_check = st.selectbox("Column to scan:", df.columns, key="map_col")
+                col_to_check = st.selectbox("Scan Column:", df.columns, key="map_col")
                 keyword = st.text_input("If it contains:")
                 category_val = st.text_input("Then assign:")
-                if st.button("Apply"):
+                if st.button("Apply Logic"):
                     if 'Category' not in df.columns: df['Category'] = "Uncategorized"
                     df.loc[df[col_to_check].astype(str).str.contains(keyword, case=False, na=False), 'Category'] = category_val
                     st.success("Logic applied!")
@@ -120,7 +129,7 @@ if check_password():
             with tabs[2]:
                 st.header("Format Scrubbing")
                 clean_col = st.selectbox("Target Column:", df.columns, key="clean_tab")
-                c_opt = st.radio("Fix:", ["Remove Symbols ($, -, %)", "Trim Whitespace", "Proper Case"])
+                c_opt = st.radio("Fix:", ["Remove Symbols ($, -, %)", "Trim Whitespace", "Proper Case (Title Case)"])
                 if st.button("Clean Now"):
                     if "Symbols" in c_opt:
                         df[clean_col] = df[clean_col].astype(str).str.replace(r'[$\-,%]', '', regex=True)
@@ -133,54 +142,60 @@ if check_password():
             # TAB 4: DUPLICATE DETECTIVE
             with tabs[3]:
                 st.header("Duplicate Detective")
-                match_cols = st.multiselect("Match based on:", df.columns)
+                match_cols = st.multiselect("Match rows based on:", df.columns)
                 if st.button("Run Scan"):
                     df['Is_Duplicate'] = df.duplicated(subset=match_cols, keep=False)
                     dupes = df[df['Is_Duplicate']]
-                    st.warning(f"Found {len(dupes)} duplicates.")
-                    st.dataframe(dupes.astype(str))
+                    if not dupes.empty:
+                        st.warning(f"Found {len(dupes)} matching rows.")
+                        st.dataframe(dupes.astype(str))
+                    else:
+                        st.success("No duplicates found!")
 
-            # TAB 5: TIME MATH (Solving the Hours/Minutes problem)
+            # TAB 5: TIME MATH
             with tabs[4]:
-                st.header("Time & Labor Math")
-                st.write("Convert hours/minutes into a single decimal value automatically.")
+                st.header("Time & Duration")
                 h_col = st.selectbox("Hours Column:", df.columns)
                 m_col = st.selectbox("Minutes Column:", df.columns)
-                if st.button("Fix Time Columns"):
+                if st.button("Convert to Decimal"):
                     h = pd.to_numeric(df[h_col], errors='coerce').fillna(0)
                     m = pd.to_numeric(df[m_col], errors='coerce').fillna(0)
                     df['Total_Hours_Decimal'] = h + (m / 60)
-                    st.success("Created 'Total_Hours_Decimal' column!")
+                    st.success("Decimal calculation added to output!")
 
-            # TAB 6: FORMAT SHIFTER
+            # TAB 6: SHIFTER
             with tabs[5]:
                 st.header("The Shifter")
-                shift_opt = st.selectbox("Format:", ["Word Table (CSV)", "HTML Report", "JSON"])
-                if st.button("Prepare"):
+                shift_opt = st.selectbox("Format:", ["Word Table (CSV)", "HTML Report (PDF Ready)", "JSON"])
+                if st.button("Prepare Export"):
                     if "Word" in shift_opt:
-                        st.download_button("📥 Download", df.to_csv(index=False), "for_word.csv")
+                        st.download_button("📥 Download", df.to_csv(index=False), "word_table.csv")
                     elif "HTML" in shift_opt:
                         st.download_button("📥 Download", df.to_html(), "report.html")
 
             # TAB 7: VALIDATOR
             with tabs[6]:
-                st.header("Data Rules")
+                st.header("Data Integrity Rules")
                 v_col = st.selectbox("Check Column:", df.columns, key="val_col")
-                v_type = st.selectbox("Rule:", ["Must be a Number", "Email Format", "Not Empty"])
+                v_type = st.selectbox("Rule:", ["Must be a Number", "Must be an Email", "Cannot be Empty"])
                 if st.button("Validate"):
                     if "Number" in v_type:
-                        err = df[~df[v_col].astype(str).str.replace('.','',1).isdigit()]
-                        st.error(f"Errors: {len(err)}")
-                        st.dataframe(err)
+                        clean_test = df[v_col].astype(str).str.replace(',','').str.replace('$','')
+                        err = df[~clean_test.str.replace('.','',1).isdigit()]
+                        if not err.empty:
+                            st.error(f"Found {len(err)} errors.")
+                            st.dataframe(err)
+                        else:
+                            st.success("Validation passed!")
 
             # TAB 8: WORD-TO-EXCEL
             with tabs[7]:
-                st.header("Word Import")
-                st.info("Any tables in uploaded .docx files are already merged into the live preview.")
+                st.header("Word Table Import")
+                st.info("Any tables in uploaded Word files were automatically extracted and are in the preview above.")
 
             # --- FINAL DOWNLOAD ---
             st.divider()
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False)
-            st.download_button("📥 DOWNLOAD COMPLETED SWISS ARMY FILE", output.getvalue(), "fixed_data.xlsx", use_container_width=True)
+            st.download_button("📥 DOWNLOAD COMPLETED FILE", output.getvalue(), "fixed_data.xlsx", use_container_width=True)
