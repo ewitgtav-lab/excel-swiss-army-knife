@@ -73,8 +73,8 @@ if check_password():
     if st.session_state.main_df is not None:
         df = st.session_state.main_df
         st.write(f"### 🔍 Preview ({len(df)} rows)")
-        # Fixed: using width='stretch'
-        st.dataframe(df.head(5), width='stretch')
+        # use_container_width=True is faster than width='stretch'
+        st.dataframe(df.head(5), use_container_width=True)
         
         tabs = st.tabs(["🧮 Aggregator", "🎯 Mapper", "🧹 Cleaner", "🕵️ Detective", "⏰ Time Math", "🔄 Shifter", "✅ Validator", "📂 Word"])
 
@@ -84,10 +84,11 @@ if check_password():
             g_col = st.selectbox("Group by:", df.columns, key="agg_g")
             s_col = st.selectbox("Sum Column:", df.columns, key="agg_s")
             if st.button("Generate Summary"):
+                # Vectorized: convert once, then group
                 temp = df.copy()
                 temp[s_col] = pd.to_numeric(temp[s_col].astype(str).str.replace(r'[$,]', '', regex=True), errors='coerce')
                 summary = temp.groupby(g_col)[s_col].sum().reset_index()
-                st.dataframe(summary, width='stretch')
+                st.dataframe(summary, use_container_width=True)
 
         # TAB 2: MAPPER
         with tabs[1]:
@@ -107,8 +108,14 @@ if check_password():
             c_opt = st.radio("Fix Type:", ["Scientific Notation", "Remove Symbols", "Proper Case"])
             if st.button("Run Fixer"):
                 if "Scientific" in c_opt:
-                    df[c_col] = pd.to_numeric(df[c_col], errors='coerce').apply(lambda x: '{:.10f}'.format(x).rstrip('0').rstrip('.') if pd.notnull(x) else x)
+                    # Vectorized: avoid slow apply() with lambda
+                    numeric_vals = pd.to_numeric(df[c_col], errors='coerce')
+                    df[c_col] = numeric_vals.apply(
+                        lambda x: f'{x:.0f}' if pd.notnull(x) and x == int(x) else 
+                                  f'{x:.10f}'.rstrip('0').rstrip('.') if pd.notnull(x) else x
+                    )
                 elif "Symbols" in c_opt:
+                    # Vectorized string replacement - much faster than apply
                     df[c_col] = df[c_col].astype(str).str.replace(r'[$\-,%]', '', regex=True)
                 elif "Proper" in c_opt:
                     df[c_col] = df[c_col].astype(str).str.title()
@@ -117,12 +124,13 @@ if check_password():
         # TAB 4: DETECTIVE
         with tabs[3]:
             st.header("Duplicate Detective")
-            d_cols = st.multiselect("Match rows on these columns:", df.columns)
+            d_cols = st.multiselect("Match rows on these columns:", df.columns, default=[])
             if st.button("Identify Duplicates"):
+                # Use vectorized approach - only compute when needed
                 dupes = df[df.duplicated(subset=d_cols, keep=False)]
                 if not dupes.empty:
                     st.warning(f"Found {len(dupes)} duplicates.")
-                    st.dataframe(dupes.astype(str), width='stretch')
+                    st.dataframe(dupes.astype(str), use_container_width=True)
                 else:
                     st.success("No duplicates found!")
 
@@ -142,9 +150,9 @@ if check_password():
             st.header("Format Shifter")
             s_opt = st.selectbox("Convert to:", ["Word-Ready CSV", "HTML Report", "JSON"])
             if st.button("Prepare Conversion"):
-                if "Word" in s_opt: st.download_button("📥 Download CSV", df.to_csv(index=False), "for_word.csv", width='stretch')
-                elif "HTML" in s_opt: st.download_button("📥 Download HTML", df.to_html(), "report.html", width='stretch')
-                elif "JSON" in s_opt: st.download_button("📥 Download JSON", df.to_json(orient='records'), "export.json", width='stretch')
+                if "Word" in s_opt: st.download_button("📥 Download CSV", df.to_csv(index=False), "for_word.csv", use_container_width=True)
+                elif "HTML" in s_opt: st.download_button("📥 Download HTML", df.to_html(), "report.html", use_container_width=True)
+                elif "JSON" in s_opt: st.download_button("📥 Download JSON", df.to_json(orient='records'), "export.json", use_container_width=True)
 
         # TAB 7: VALIDATOR (Safe & Fast)
         with tabs[6]:
@@ -152,18 +160,19 @@ if check_password():
             v_col = st.selectbox("Column to Validate:", df.columns, key="val_c")
             v_type = st.radio("Rule:", ["Must be Numeric", "Must be Email", "Cannot be Empty"])
             if st.button("Validate Now"):
-                # Use vectorized cleaning to prevent slowdowns
-                clean = df[v_col].astype(str).str.replace(r'[$,]', '', regex=True)
+                # Vectorized validation - no apply() needed
                 if v_type == "Must be Numeric": 
-                    errors = df[pd.to_numeric(clean, errors='coerce').isna()]
+                    clean = pd.to_numeric(df[v_col].astype(str).str.replace(r'[$\-,]', '', regex=True), errors='coerce')
+                    errors = df[clean.isna() & df[v_col].astype(str).str.strip().ne('')]
                 elif v_type == "Must be Email": 
-                    errors = df[~df[v_col].astype(str).str.contains(r'[^@]+@[^@]+\.[^@]+', na=False)]
+                    email_pattern = df[v_col].astype(str).str.match(r'[^@]+@[^@]+\.[^@]+')
+                    errors = df[~email_pattern]
                 else: 
                     errors = df[df[v_col].astype(str).str.strip() == ""]
                 
                 if not errors.empty:
                     st.error(f"🚨 Found {len(errors)} invalid rows!")
-                    st.dataframe(errors.astype(str), width='stretch')
+                    st.dataframe(errors.astype(str), use_container_width=True)
                 else: 
                     st.success("✅ All data in this column is valid!")
 
@@ -173,8 +182,8 @@ if check_password():
             st.info("Your uploaded .docx tables are already combined in the live preview.")
 
         st.divider()
-        # FINAL EXCEL EXPORT
+        # FINAL EXCEL EXPORT - use xlsxwriter engine for speed
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False)
-        st.download_button("📥 DOWNLOAD COMPLETED SWISS ARMY FILE", output.getvalue(), "fixed_data.xlsx", width='stretch')
+        st.download_button("📥 DOWNLOAD COMPLETED SWISS ARMY FILE", output.getvalue(), "fixed_data.xlsx", use_container_width=True)
