@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
-from docx import Document # Add python-docx to requirements.txt
+from docx import Document # Requires python-docx in requirements.txt
 from io import BytesIO
 
 # --- CONFIGURATION ---
@@ -34,26 +34,17 @@ if check_password():
             st.rerun()
         
         st.divider()
-        
-        st.header("📣 Community Support")
-        # Update these links with your actual URLs
-        st.link_button("🪲 Report a Bug / Request Feature", "https://forms.gle/MmTzTHkwuufXc95R7")
+        st.header("📣 Support & Feedback")
+        st.link_button("🪲 Report a Bug", "https://forms.gle/rVE2KkorZX4iqWNq7")
         st.link_button("☕ Buy Me A Coffee", "https://paypal.me/GewishCatedrilla")
         
         st.divider()
-        st.markdown("""
-        **Quick Guide:**
-        1. **Upload** (Excel, CSV, PDF, Word).
-        2. **Fix** using the specialized tabs.
-        3. **Download** your clean file below.
-        """)
-        st.write("---")
-        st.caption("Built with ❤️ for r/excel")
+        st.markdown("**Built for the r/excel community.**")
 
     st.title("🛠️ The Excel Swiss Army Knife")
-    st.markdown("Fixing the headaches of Reddit, one row at a time.")
+    st.markdown("Automating the headaches you'd normally need 100 formulas to fix.")
 
-    uploaded_files = st.file_uploader("Drop your messy files here", 
+    uploaded_files = st.file_uploader("Upload Excel, CSV, PDF, or Word", 
                                      type=["xlsx", "csv", "pdf", "docx"], 
                                      accept_multiple_files=True)
 
@@ -83,9 +74,14 @@ if check_password():
         
         if df_list:
             df = pd.concat(df_list, ignore_index=True)
-            # Auto-detect headers if the first row looks like labels
+            
+            # --- CRITICAL FIX: Header Sanitization ---
+            # This converts all column names to strings to stop the Arrow warning
+            df.columns = [str(c) for c in df.columns]
+            
+            # Auto-detect if row 0 is actually the header
             if not df.empty and any(df.iloc[0].isna()) == False:
-                df.columns = df.iloc[0]
+                df.columns = [str(c) for c in df.iloc[0]]
                 df = df[1:].reset_index(drop=True)
 
         if not df.empty:
@@ -100,20 +96,20 @@ if check_password():
             with tabs[0]:
                 st.header("Categorization & Logic")
                 col_to_check = st.selectbox("Column to scan:", df.columns, key="map_col")
-                keyword = st.text_input("Find this keyword (e.g. 'Laptop'):")
-                category_val = st.text_input("Assign this value (e.g. 'Electronics'):")
+                keyword = st.text_input("Find this keyword:")
+                category_val = st.text_input("Assign this value:")
                 if st.button("Apply Logic"):
                     if 'New_Category' not in df.columns: df['New_Category'] = "Uncategorized"
                     df.loc[df[col_to_check].astype(str).str.contains(keyword, case=False, na=False), 'New_Category'] = category_val
-                    st.success("Logic applied successfully!")
+                    st.success("Logic applied!")
 
             # TAB 2: CLEANER (Scientific Notation Fix)
             with tabs[1]:
                 st.header("The Formatting Fixer")
                 clean_col = st.selectbox("Select Column:", df.columns, key="clean_tab")
-                c_opt = st.radio("Fix Type:", ["Force Plain Text (Fix Scientific Notation)", "Remove Symbols ($, -, %)", "Trim Spaces"])
+                c_opt = st.radio("Fix Type:", ["Fix Scientific Notation (0.000077)", "Remove Symbols ($, -, %)", "Trim Spaces"])
                 if st.button("Run Cleaner"):
-                    if "Plain Text" in c_opt:
+                    if "Scientific" in c_opt:
                         df[clean_col] = df[clean_col].astype(str).apply(lambda x: '{:.10f}'.format(float(x)).rstrip('0').rstrip('.') if 'E' in str(x) else x)
                     elif "Symbols" in c_opt:
                         df[clean_col] = df[clean_col].astype(str).str.replace(r'[$\-,%]', '', regex=True)
@@ -139,7 +135,7 @@ if check_password():
                 st.header("Time & Duration Math")
                 t1 = st.selectbox("Start Time:", df.columns, key="t1")
                 t2 = st.selectbox("End Time:", df.columns, key="t2")
-                if st.button("Calc Minutes"):
+                if st.button("Calculate Minutes"):
                     df['Total_Minutes'] = (pd.to_datetime(df[t2], errors='coerce') - pd.to_datetime(df[t1], errors='coerce')).dt.total_seconds() / 60
                     st.success("Calculated durations!")
 
@@ -167,7 +163,9 @@ if check_password():
                 v_type = st.selectbox("Validation Rule:", ["Must be a Number", "Must be an Email", "Cannot be Empty"])
                 if st.button("Validate Now"):
                     if "Number" in v_type:
-                        errors = df[~df[v_col].astype(str).str.replace('.','',1).isdigit()]
+                        # Clean up strings that look like numbers before checking
+                        test_col = df[v_col].astype(str).str.replace(',','').str.replace('$','')
+                        errors = df[~test_col.str.replace('.','',1).isdigit()]
                         if not errors.empty:
                             st.error(f"Found {len(errors)} invalid numbers!")
                             st.dataframe(errors)
@@ -177,17 +175,11 @@ if check_password():
             # TAB 8: WORD-TO-EXCEL
             with tabs[7]:
                 st.header("Word Table Import")
-                st.info("Any tables found in uploaded Word documents have already been merged into the Preview above.")
-                st.write("If data looks messy, try saving the Word doc as a PDF and re-uploading.")
+                st.info("Any tables found in Word docs are already in the Live Preview above.")
 
             # --- FINAL DOWNLOAD ---
             st.divider()
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("Finalize & Export")
-                st.write("Click the button to download your fully processed and cleaned Excel file.")
-            with col2:
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, index=False)
-                st.download_button("📥 DOWNLOAD CLEAN EXCEL FILE", output.getvalue(), "fixed_data.xlsx", use_container_width=True)
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False)
+            st.download_button("📥 DOWNLOAD CLEAN EXCEL FILE", output.getvalue(), "fixed_data.xlsx", use_container_width=True)
