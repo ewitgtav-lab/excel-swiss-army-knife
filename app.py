@@ -113,54 +113,46 @@ if check_password():
                     df[clean_col] = df[clean_col].astype(str).str.replace(char_to_rem, "", regex=False)
                     st.success(f"Cleaned {clean_col}!")
 
-            # --- TAB 4 FIX (Time Calculator) ---
-with tab4:
-    st.header("Time & Date Math")
-    t_col1 = st.selectbox("Start Time", df.columns, key="time_src1")
-    t_col2 = st.selectbox("End Time", df.columns, key="time_src2")
-    if st.button("Calculate Minutes"):
-        # errors='coerce' prevents the "SHP-101" crash by turning bad dates into "NaT" instead of an error
-        df['Duration_Mins'] = (pd.to_datetime(df[t_col2], errors='coerce') - 
-                               pd.to_datetime(df[t_col1], errors='coerce')).dt.total_seconds() / 60
-        st.success("Calculated durations! Invalid dates were skipped.")
+            with tab4:
+                st.header("Time & Date Math")
+                t_col1 = st.selectbox("Start Time", df.columns, key="time_src1")
+                t_col2 = st.selectbox("End Time", df.columns, key="time_src2")
+                if st.button("Calculate Minutes"):
+                    # errors='coerce' prevents the "SHP-101" crash
+                    df['Duration_Mins'] = (pd.to_datetime(df[t_col2], errors='coerce') - 
+                                           pd.to_datetime(df[t_col1], errors='coerce')).dt.total_seconds() / 60
+                    st.success("Calculated durations! Invalid dates were skipped.")
 
-# --- TAB 5 UPDATE (Added Column Labels) ---
-with tab5:
-    st.header("📊 Multi-File Summary")
-    st.write(f"**Total Rows:** {len(df)}")
-    st.write(f"**Total Columns:** {len(df.columns)}")
-    st.write("**Column Labels:**")
-    st.info(", ".join(df.columns)) # This lists all your headers clearly
+            with tab5:
+                st.header("📊 Multi-File Summary")
+                st.write(f"**Total Rows:** {len(df)}")
+                st.write(f"**Total Columns:** {len(df.columns)}")
+                st.write("**Column Labels:**")
+                st.info(", ".join(df.columns)) 
 
-# --- TAB 6 FIX (Robust Duplicate Detective) ---
-with tab6:
-    st.header("🕵️ Duplicate Detective")
-    match_cols = st.multiselect("Select columns that should be unique:", df.columns)
-    
-    if match_cols:
-        if st.button("Run Duplicate Scan"):
-            # 1. Create a clean temporary version for scanning
-            # We remove rows that are entirely empty in the match columns
-            scan_df = df.dropna(subset=match_cols).copy()
-            
-            # 2. Force to string to prevent Arrow crashes with mixed IDs (e.g., TT-991)
-            for col in match_cols:
-                scan_df[col] = scan_df[col].astype(str)
-            
-            # 3. Mark duplicates
-            df['Is_Duplicate'] = False
-            df.loc[scan_df.index, 'Is_Duplicate'] = scan_df.duplicated(subset=match_cols, keep=False)
-            
-            dupes_only = df[df['Is_Duplicate'] == True].sort_values(by=match_cols)
-            
-            if not dupes_only.empty:
-                st.warning(f"🚨 Found {len(dupes_only)} duplicate rows!")
-                def highlight_dupes(x):
-                    return ['background-color: #4b2525' if x.Is_Duplicate else '' for _ in x]
-                # astype(str) here ensures the UI doesn't crash on "SHP-103" types
-                st.dataframe(dupes_only.astype(str).style.apply(highlight_dupes, axis=1))
-            else:
-                st.success("✅ No duplicates found in your selected columns!")
+            with tab6:
+                st.header("🕵️ Duplicate Detective")
+                match_cols = st.multiselect("Select columns that should be unique:", df.columns)
+                
+                if match_cols:
+                    if st.button("Run Duplicate Scan"):
+                        scan_df = df.dropna(subset=match_cols).copy()
+                        for col in match_cols:
+                            scan_df[col] = scan_df[col].astype(str)
+                        
+                        df['Is_Duplicate'] = False
+                        df.loc[scan_df.index, 'Is_Duplicate'] = scan_df.duplicated(subset=match_cols, keep=False)
+                        
+                        dupes_only = df[df['Is_Duplicate'] == True].sort_values(by=match_cols)
+                        
+                        if not dupes_only.empty:
+                            st.warning(f"🚨 Found {len(dupes_only)} duplicate rows!")
+                            def highlight_dupes(x):
+                                return ['background-color: #4b2525' if x.Is_Duplicate else '' for _ in x]
+                            st.dataframe(dupes_only.astype(str).style.apply(highlight_dupes, axis=1))
+                        else:
+                            st.success("✅ No duplicates found in your selected columns!")
+
             st.divider()
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
